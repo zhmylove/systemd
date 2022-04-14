@@ -13,6 +13,7 @@
 #include "journal-file.h"
 #include "list.h"
 #include "set.h"
+#include "pst.h"
 
 typedef struct Match Match;
 typedef struct Location Location;
@@ -81,6 +82,8 @@ struct sd_journal {
 
         Match *level0, *level1, *level2;
 
+        pst_node_t* exclude;
+
         pid_t original_pid;
 
         int inotify_fd;
@@ -112,6 +115,7 @@ struct sd_journal {
         bool fields_file_lost:1;
         bool has_runtime_files:1;
         bool has_persistent_files:1;
+        bool strip:1;
 
         size_t data_threshold;
 

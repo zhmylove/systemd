@@ -1,0 +1,46 @@
+## This patch introduces:
+# -s (--strip) option to strip each message by '\n'
+# -T (--exclude) option inspired by `-t' to exclude specified syslog identifier from the output
+
+## I don't suggest to run `make install' as it'll probably overwrite your existing systemd
+
+## BUILDING
+
+## On CentOS install required dependencies
+sudo yum install meson ninja-build gperf libcap-devel libmount-devel docbook-style-xsl
+
+## Optionally update pseudo tree sources from external repo:
+## (not required if building from github)
+# cd src/basic/
+# wget https://raw.githubusercontent.com/zhmylove/zstructs/master/pst.c
+# wget https://raw.githubusercontent.com/zhmylove/zstructs/master/pst.h
+
+## Optionally set -O3
+export 'CFLAGS=-O3'
+
+## Run configure
+./configure
+# Or:
+# ./configure --wipe --reconfigure
+
+## Run make
+make
+
+## Output will be under:
+# ./build/journalctl
+
+## It has one dynamic library as a dependency: libsystemd-shared-239.so
+ldd ./build/journalctl
+# libsystemd-shared-239.so => ..././build/src/shared/libsystemd-shared-239.so (0x00007f9e89e40000)
+
+
+## INSTALLING
+
+# mkdir -p "$HOME/bin" "$HOME/lib"
+# Add "$HOME/lib" to LD_LIBRARY_PATH in your rc file. For example:
+# Add "$HOME/bin" to PATH in your rc file. For example:
+## LD_LIBRARY_PATH="$HOME/lib"
+## PATH="$HOME/lib:$PATH"
+## export LD_LIBRARY_PATH PATH
+# cp ./build/journalctl "$HOME/bin/"
+# cp ./build/src/shared/libsystemd-shared-239.so "$HOME/lib/"

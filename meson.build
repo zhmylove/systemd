@@ -764,15 +764,6 @@ substs.set('DEBUGTTY', get_option('debug-tty'))
 
 enable_debug_hashmap = false
 enable_debug_mmap_cache = false
-foreach name : get_option('debug')
-        if name == 'hashmap'
-                enable_debug_hashmap = true
-        elif name == 'mmap-cache'
-                enable_debug_mmap_cache = true
-        else
-                message('unknown debug option "@0@", ignoring'.format(name))
-        endif
-endforeach
 conf.set10('ENABLE_DEBUG_HASHMAP', enable_debug_hashmap)
 conf.set10('ENABLE_DEBUG_MMAP_CACHE', enable_debug_mmap_cache)
 

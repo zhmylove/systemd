@@ -50,6 +50,7 @@
 #include "pager.h"
 #include "parse-util.h"
 #include "path-util.h"
+#include "pst.h"
 #include "rlimit-util.h"
 #include "set.h"
 #include "sigbus.h"
@@ -131,11 +132,13 @@ static bool arg_force = false;
 static usec_t arg_since, arg_until;
 static bool arg_since_set = false, arg_until_set = false;
 static char **arg_syslog_identifier = NULL;
+static char **arg_exclude_identifier = NULL;
 static char **arg_system_units = NULL;
 static char **arg_user_units = NULL;
 static const char *arg_field = NULL;
 static bool arg_catalog = false;
 static bool arg_reverse = false;
+static bool arg_strip = false;
 static int arg_journal_type = 0;
 static char *arg_root = NULL;
 static const char *arg_machine = NULL;
@@ -318,6 +321,7 @@ static void help(void) {
                "  -u --unit=UNIT             Show logs from the specified unit\n"
                "     --user-unit=UNIT        Show logs from the specified user unit\n"
                "  -t --identifier=STRING     Show entries with the specified syslog identifier\n"
+               "  -T --exclude=STRING        Exclude entries with the specified syslog identifier\n"
                "  -p --priority=RANGE        Show entries with the specified priority\n"
                "  -g --grep=PATTERN          Show entries with MESSAGE matching PATTERN\n"
                "     --case-sensitive[=BOOL] Force case sensitive or insenstive matching\n"
@@ -330,6 +334,7 @@ static void help(void) {
                "                               short-iso, short-iso-precise, short-full,\n"
                "                               short-monotonic, short-unix, verbose, export,\n"
                "                               json, json-pretty, json-sse, cat, with-unit)\n"
+               "  -s --strip                 Stip message by newline\n"
                "     --output-fields=LIST    Select fields to print in verbose/export/json modes\n"
                "     --utc                   Express time in Coordinated Universal Time (UTC)\n"
                "  -x --catalog               Add message explanations where available\n"
@@ -418,6 +423,7 @@ static int parse_argv(int argc, char *argv[]) {
                 { "follow",         no_argument,       NULL, 'f'                },
                 { "force",          no_argument,       NULL, ARG_FORCE          },
                 { "output",         required_argument, NULL, 'o'                },
+                { "strip",          no_argument,       NULL, 's'                },
                 { "all",            no_argument,       NULL, 'a'                },
                 { "full",           no_argument,       NULL, 'l'                },
                 { "no-full",        no_argument,       NULL, ARG_NO_FULL        },
@@ -437,6 +443,7 @@ static int parse_argv(int argc, char *argv[]) {
                 { "root",           required_argument, NULL, ARG_ROOT           },
                 { "header",         no_argument,       NULL, ARG_HEADER         },
                 { "identifier",     required_argument, NULL, 't'                },
+                { "exclude",        required_argument, NULL, 'T'                },
                 { "priority",       required_argument, NULL, 'p'                },
                 { "grep",           required_argument, NULL, 'g'                },
                 { "case-sensitive", optional_argument, NULL, ARG_CASE_SENSITIVE },
@@ -477,7 +484,7 @@ static int parse_argv(int argc, char *argv[]) {
         assert(argc >= 0);
         assert(argv);
 
-        while ((c = getopt_long(argc, argv, "hefo:aln::qmb::kD:p:g:c:S:U:t:u:NF:xrM:", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, "hefo:saln::qmb::kD:p:g:c:S:U:t:T:u:NF:xrM:", options, NULL)) >= 0)
 
                 switch (c) {
 
@@ -519,6 +526,10 @@ static int parse_argv(int argc, char *argv[]) {
                         if (IN_SET(arg_output, OUTPUT_EXPORT, OUTPUT_JSON, OUTPUT_JSON_PRETTY, OUTPUT_JSON_SSE, OUTPUT_CAT))
                                 arg_quiet = true;
 
+                        break;
+
+                case 's':
+                        arg_strip = true;
                         break;
 
                 case 'l':
@@ -836,6 +847,12 @@ static int parse_argv(int argc, char *argv[]) {
 
                 case 't':
                         r = strv_extend(&arg_syslog_identifier, optarg);
+                        if (r < 0)
+                                return log_oom();
+                        break;
+
+                case 'T':
+                        r = strv_extend(&arg_exclude_identifier, optarg);
                         if (r < 0)
                                 return log_oom();
                         break;
@@ -1668,6 +1685,25 @@ static int add_syslog_identifier(sd_journal *j) {
         return 0;
 }
 
+static int add_exclude_identifier(sd_journal *j) {
+        char **i;
+
+        assert(j);
+
+        if (!j->exclude)
+                j->exclude = pst_create();
+
+        assert(j->exclude);
+
+        STRV_FOREACH(i, arg_exclude_identifier) {
+                if (pst_add(j->exclude, *i, (void*)0x1) != (void*)0x1) {
+                        return -1;
+                }
+        }
+
+        return 0;
+}
+
 static int setup_keys(void) {
 #if HAVE_GCRYPT
         size_t mpk_size, seed_size, state_size, i;
@@ -2334,6 +2370,12 @@ int main(int argc, char *argv[]) {
                 goto finish;
         }
 
+        r = add_exclude_identifier(j);
+        if (r < 0) {
+                log_error_errno(r, "Failed to add exclude filter for syslog identifiers: %m");
+                goto finish;
+        }
+
         r = add_priorities(j);
         if (r < 0)
                 goto finish;
@@ -2403,6 +2445,9 @@ int main(int argc, char *argv[]) {
                         goto finish;
                 }
         }
+
+        // KorG
+        j->strip = arg_strip;
 
         if (arg_cursor || arg_after_cursor) {
                 r = sd_journal_seek_cursor(j, arg_cursor ?: arg_after_cursor);
@@ -2675,6 +2720,7 @@ finish:
         strv_free(arg_file);
 
         strv_free(arg_syslog_identifier);
+        strv_free(arg_exclude_identifier);
         strv_free(arg_system_units);
         strv_free(arg_user_units);
         strv_free(arg_output_fields);

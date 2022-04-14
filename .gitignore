@@ -32,3 +32,4 @@
 /mkosi.output/
 /tags
 __pycache__/
+cscope*

@@ -27,6 +27,7 @@
 #include "output-mode.h"
 #include "parse-util.h"
 #include "process-util.h"
+#include "pst.h"
 #include "sparse-endian.h"
 #include "stdio-util.h"
 #include "string-table.h"
@@ -425,6 +426,20 @@ static int output_short(
         if (!message) {
                 log_debug("Skipping message without MESSAGE= field.");
                 return 0;
+        }
+
+        if (pst_lookup(j->exclude, identifier)) {
+                return 0;
+        }
+
+        if (j->strip) {
+                char *__p = message;
+                message_len = 0;
+                while (*__p & ~'\n') {
+                        message_len++;
+                        __p++;
+                }
+                *__p = '\0';
         }
 
         if (!(flags & OUTPUT_SHOW_ALL))
